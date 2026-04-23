@@ -3,15 +3,102 @@ const cors = require('cors');
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
-const dotenvModulePath = path.join(__dirname, 'node_modules', 'dotenv');
 const supabaseModulePath = path.join(__dirname, 'node_modules', '@supabase', 'supabase-js');
 
-const dotenv = fs.existsSync(dotenvModulePath) ? require('dotenv') : null;
 const createSupabaseClient = fs.existsSync(supabaseModulePath)
   ? require('@supabase/supabase-js').createClient
   : null;
 
-if (dotenv) dotenv.config();
+function loadEnvFile(filePath) {
+  if (!fs.existsSync(filePath)) return;
+  const content = fs.readFileSync(filePath, 'utf8');
+  content.split(/\r?\n/).forEach((line) => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) return;
+    const separator = trimmed.indexOf('=');
+    if (separator < 1) return;
+    const key = trimmed.slice(0, separator).trim();
+    const value = trimmed.slice(separator + 1).trim();
+    if (!(key in process.env)) {
+      process.env[key] = value;
+    }
+  });
+}
+
+const defaultEnvPath = path.join(__dirname, '.env');
+const exampleEnvPath = path.join(__dirname, '.env.example');
+if (fs.existsSync(defaultEnvPath)) {
+  loadEnvFile(defaultEnvPath);
+} else if (fs.existsSync(exampleEnvPath)) {
+  loadEnvFile(exampleEnvPath);
+}
+
+function createSupabaseAuthFallback(url, apiKey) {
+  const authHeaders = (token) => ({
+    apikey: apiKey,
+    Authorization: `Bearer ${token || apiKey}`,
+    'Content-Type': 'application/json'
+  });
+
+  const parseResponse = async (response) => {
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return { data: null, error: { message: payload?.msg || payload?.error_description || payload?.error || 'Supabase request failed' } };
+    }
+    return { data: payload, error: null };
+  };
+
+  return {
+    auth: {
+      async signInWithPassword({ email, password }) {
+        try {
+          const response = await fetch(`${url}/auth/v1/token?grant_type=password`, {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify({ email, password })
+          });
+          const { data, error } = await parseResponse(response);
+          if (error) return { data: null, error };
+          return { data: { user: data.user, session: data }, error: null };
+        } catch (error) {
+          return { data: null, error: { message: error.message || 'Unable to reach Supabase Auth API' } };
+        }
+      },
+      async signUp({ email, password, options }) {
+        try {
+          const response = await fetch(`${url}/auth/v1/signup`, {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify({
+              email,
+              password,
+              data: options?.data || {}
+            })
+          });
+          const { data, error } = await parseResponse(response);
+          if (error) return { data: null, error };
+          return { data: { user: data.user, session: data }, error: null };
+        } catch (error) {
+          return { data: null, error: { message: error.message || 'Unable to reach Supabase Auth API' } };
+        }
+      },
+      async getUser(token) {
+        try {
+          const response = await fetch(`${url}/auth/v1/user`, {
+            method: 'GET',
+            headers: authHeaders(token)
+          });
+          const { data, error } = await parseResponse(response);
+          if (error) return { data: null, error };
+          return { data: { user: data }, error: null };
+        } catch (error) {
+          return { data: null, error: { message: error.message || 'Unable to reach Supabase Auth API' } };
+        }
+      }
+    },
+    storage: null
+  };
+}
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -37,12 +124,18 @@ const SUPABASE_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KE
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const SUPABASE_STORAGE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET || 'avatars';
 const USE_SUPABASE = Boolean(SUPABASE_URL && (SUPABASE_SERVICE_ROLE_KEY || SUPABASE_PUBLISHABLE_KEY));
+const SUPABASE_API_KEY = SUPABASE_SERVICE_ROLE_KEY || SUPABASE_PUBLISHABLE_KEY;
 
-const supabaseAdmin = USE_SUPABASE && createSupabaseClient
-  ? createSupabaseClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY || SUPABASE_PUBLISHABLE_KEY, {
-    auth: { autoRefreshToken: false, persistSession: false }
-  })
+const supabaseAdmin = USE_SUPABASE
+  ? createSupabaseClient
+    ? createSupabaseClient(SUPABASE_URL, SUPABASE_API_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false }
+    })
+    : createSupabaseAuthFallback(SUPABASE_URL, SUPABASE_API_KEY)
   : null;
+
+const hasSupabaseDataApi = Boolean(supabaseAdmin && typeof supabaseAdmin.from === 'function');
+const hasSupabaseStorageApi = Boolean(supabaseAdmin?.storage && typeof supabaseAdmin.storage.from === 'function');
 
 [path.dirname(SONGS_FILE), UPLOADS_DIR, AUDIO_DIR, COVER_DIR, PUBLIC_DIR].forEach((dir) => {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -64,6 +157,15 @@ app.use(express.static(PUBLIC_DIR));
 function ensureSupabaseReady(res) {
   if (!supabaseAdmin) {
     res.status(500).json({ error: 'Supabase is not configured. Set env values and install Supabase packages first.' });
+    return false;
+  }
+  return true;
+}
+
+function ensureSupabaseDataReady(res) {
+  if (!ensureSupabaseReady(res)) return false;
+  if (!hasSupabaseDataApi) {
+    res.status(500).json({ error: 'Supabase data/storage features require @supabase/supabase-js to be installed.' });
     return false;
   }
   return true;
@@ -204,7 +306,7 @@ app.get('/api', (req, res) => {
 });
 
 app.post('/api/auth/signup', async (req, res) => {
-  if (!ensureSupabaseReady(res)) return;
+  if (!ensureSupabaseDataReady(res)) return;
 
   const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
   const password = typeof req.body?.password === 'string' ? req.body.password : '';
@@ -265,6 +367,7 @@ app.post('/api/auth/signin', async (req, res) => {
 });
 
 app.get('/api/profile-view', requireSupabaseUser, async (req, res) => {
+  if (!ensureSupabaseDataReady(res)) return;
   const user = req.supabaseUser;
   const { data: profile } = await supabaseAdmin
     .from('profiles')
@@ -284,6 +387,7 @@ app.get('/api/profile-view', requireSupabaseUser, async (req, res) => {
 });
 
 app.put('/api/profile', requireSupabaseUser, async (req, res) => {
+  if (!ensureSupabaseDataReady(res)) return;
   const user = req.supabaseUser;
   const fullName = typeof req.body?.fullName === 'string' ? req.body.fullName.trim() : null;
   const bio = typeof req.body?.bio === 'string' ? req.body.bio.trim() : null;
@@ -306,6 +410,10 @@ app.put('/api/profile', requireSupabaseUser, async (req, res) => {
 });
 
 app.post('/api/profile/avatar', requireSupabaseUser, avatarUpload.single('avatar'), async (req, res) => {
+  if (!ensureSupabaseDataReady(res)) return;
+  if (!hasSupabaseStorageApi) {
+    return res.status(500).json({ error: 'Supabase storage features require @supabase/supabase-js to be installed.' });
+  }
   if (!req.file) return res.status(400).json({ error: 'avatar file is required' });
 
   const user = req.supabaseUser;
