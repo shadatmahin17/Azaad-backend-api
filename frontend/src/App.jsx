@@ -19,7 +19,11 @@ import {
   Menu,
   ImageIcon,
   Sparkles,
-  Clock3
+  Clock3,
+  User,
+  Mail,
+  PenLine,
+  CalendarDays
 } from 'lucide-react';
 
 const DEFAULT_API_BASE = typeof window !== 'undefined' ? `${window.location.origin}/api/songs` : 'http://localhost:5000/api/songs';
@@ -585,31 +589,73 @@ export default function App() {
           )}
 
           {view === 'profile' && (
-            <form onSubmit={updateBranding} className={`max-w-3xl rounded-3xl p-6 space-y-5 ${isLightTheme ? 'bg-white border border-slate-200' : 'bg-white/[0.03] border border-white/10'}`}>
-              <h3 className="text-xl font-black">Profile & Branding</h3>
+            <form onSubmit={updateBranding} className="w-full max-w-5xl space-y-6">
+              <section
+                className="rounded-[2rem] border border-emerald-400/45 bg-cover bg-center bg-no-repeat p-8 md:p-10 text-white relative overflow-hidden"
+                style={{ backgroundImage: `linear-gradient(180deg, rgba(11,21,18,0.58), rgba(5,14,12,0.78)), url(${APP_BACKGROUND_IMAGE_URL})` }}
+              >
+                <div className="absolute inset-0 backdrop-blur-[1px]" />
+                <div className="relative z-10 flex flex-col items-center text-center">
+                  <label className="relative cursor-pointer group">
+                    <img src={branding.adminPhoto} alt="admin" className="w-32 h-32 rounded-full object-cover border-4 border-emerald-400 shadow-[0_0_0_4px_rgba(16,185,129,0.15)]" />
+                    <span className="absolute inset-0 bg-black/45 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <Camera className="w-6 h-6" />
+                    </span>
+                    <input type="file" accept="image/*" onChange={(e) => handleFilePreview(e, 'avatar')} className="hidden" />
+                  </label>
 
-              <div className="flex items-center gap-4">
-                <label className="relative cursor-pointer">
-                  <img src={branding.adminPhoto} alt="admin" className="w-20 h-20 rounded-2xl object-cover" />
-                  <span className="absolute inset-0 bg-black/40 rounded-2xl opacity-0 hover:opacity-100 flex items-center justify-center"><Camera className="w-5 h-5" /></span>
-                  <input type="file" accept="image/*" onChange={(e) => handleFilePreview(e, 'avatar')} className="hidden" />
-                </label>
-                <div>
-                  <p className="font-semibold">{branding.adminName}</p>
-                  <p className="text-xs text-neutral-500">{branding.bio}</p>
+                  <h3 className="mt-6 text-4xl font-black tracking-tight">{branding.adminName}</h3>
+                  <p className="text-lg text-slate-300 font-semibold">{branding.adminEmail}</p>
+
+                  <div className="mt-6 flex flex-wrap justify-center gap-3">
+                    <span className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-black/45 border border-white/10 font-bold">
+                      <Music2 className="w-4 h-4" /> {songs.length} Tracks
+                    </span>
+                    <span className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-black/45 border border-white/10 font-bold">
+                      <CalendarDays className="w-4 h-4" /> Member since 2025
+                    </span>
+                  </div>
                 </div>
-              </div>
+              </section>
 
-              <div className="grid md:grid-cols-2 gap-4">
-                <input name="siteName" defaultValue={branding.siteName} required placeholder="Site Name" className={`px-4 py-3 rounded-xl ${isLightTheme ? 'bg-white border border-slate-300 text-slate-900' : 'bg-black/40 border border-white/10'}`} />
-                <input name="logoText" defaultValue={branding.logoText} required placeholder="Logo Text" className={`px-4 py-3 rounded-xl ${isLightTheme ? 'bg-white border border-slate-300 text-slate-900' : 'bg-black/40 border border-white/10'}`} />
-                <input type="color" name="themeColor" defaultValue={branding.themeColor} className={`h-12 rounded-xl ${isLightTheme ? 'bg-white border border-slate-300' : 'bg-black/40 border border-white/10'}`} />
-                <input name="adminName" defaultValue={branding.adminName} required placeholder="Admin Name" className={`px-4 py-3 rounded-xl ${isLightTheme ? 'bg-white border border-slate-300 text-slate-900' : 'bg-black/40 border border-white/10'}`} />
-                <input name="adminEmail" defaultValue={branding.adminEmail} required placeholder="Admin Email" className={`px-4 py-3 rounded-xl ${isLightTheme ? 'bg-white border border-slate-300 text-slate-900' : 'bg-black/40 border border-white/10'}`} />
-                <input name="bio" defaultValue={branding.bio} placeholder="Bio" className={`px-4 py-3 rounded-xl ${isLightTheme ? 'bg-white border border-slate-300 text-slate-900' : 'bg-black/40 border border-white/10'}`} />
-              </div>
+              <section className="rounded-[2rem] border border-white/20 bg-slate-900/65 backdrop-blur-sm p-6 md:p-8 text-white">
+                <h4 className="text-3xl font-black mb-5 flex items-center gap-3">
+                  <User className="w-7 h-7 text-slate-100" /> Personal Information
+                </h4>
 
-              <button className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-bold flex items-center justify-center gap-2"><Save className="w-4 h-4" /> Save Settings</button>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-xl font-extrabold flex items-center gap-2 mb-2 text-slate-200">
+                      <User className="w-5 h-5 text-emerald-400" /> FULL NAME
+                    </label>
+                    <input name="adminName" defaultValue={branding.adminName} required placeholder="Admin Name" className="w-full px-5 py-3 rounded-full bg-white text-slate-900 text-3xl md:text-4xl font-black border border-white/80 focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+                  </div>
+
+                  <div>
+                    <label className="text-xl font-extrabold flex items-center gap-2 mb-2 text-slate-200">
+                      <Mail className="w-5 h-5 text-emerald-400" /> EMAIL ADDRESS
+                    </label>
+                    <input name="adminEmail" defaultValue={branding.adminEmail} required placeholder="Admin Email" className="w-full px-5 py-3 rounded-full bg-white text-slate-900 text-3xl md:text-4xl font-black border border-white/80 focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+                  </div>
+
+                  <div>
+                    <label className="text-xl font-extrabold flex items-center gap-2 mb-2 text-slate-200">
+                      <PenLine className="w-5 h-5 text-emerald-400" /> BIO
+                    </label>
+                    <input name="bio" defaultValue={branding.bio} placeholder="Bio" className="w-full px-5 py-3 rounded-full bg-white text-slate-900 text-lg md:text-xl font-semibold border border-white/80 focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-3 gap-4 mt-6">
+                  <input name="siteName" defaultValue={branding.siteName} required placeholder="Site Name" className="px-4 py-3 rounded-xl bg-white/95 text-slate-900 border border-white/80 focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+                  <input name="logoText" defaultValue={branding.logoText} required placeholder="Logo Text" className="px-4 py-3 rounded-xl bg-white/95 text-slate-900 border border-white/80 focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+                  <input type="color" name="themeColor" defaultValue={branding.themeColor} className="h-12 rounded-xl bg-white border border-white/80" />
+                </div>
+
+                <button className="mt-6 w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black flex items-center justify-center gap-2 transition-colors">
+                  <Save className="w-4 h-4" /> Save Settings
+                </button>
+              </section>
             </form>
           )}
         </section>
