@@ -26,6 +26,7 @@ const monthlyStats = document.getElementById('monthlyStats');
 const categoryStats = document.getElementById('categoryStats');
 
 const views = {
+  dashboard: document.getElementById('overviewView'),
   library: document.getElementById('libraryView'),
   upload: document.getElementById('uploadView'),
   profile: document.getElementById('profileView')
@@ -257,22 +258,21 @@ function switchView(target) {
   Object.entries(views).forEach(([key, element]) => {
     element.classList.toggle('hidden', key !== target);
   });
-  if (overviewView) {
-    overviewView.classList.toggle('hidden', target !== 'library');
-  }
 
   navButtons.forEach((button) => {
     button.classList.toggle('active', button.dataset.view === target);
   });
 
   const map = {
-    library: ['Dashboard', 'Plan, prioritize, and accomplish your tasks with ease.'],
+    dashboard: ['Dashboard', 'Plan, prioritize, and accomplish your tasks with ease.'],
+    library: ['<i class="fas fa-music"></i> Music Library', 'View all uploaded songs, search tracks, and manage your catalog.'],
     upload: ['<i class="fas fa-cloud-upload-alt"></i> Upload Track', 'Create and publish a new song'],
     profile: ['<i class="fas fa-user-cog"></i> Profile Settings', 'Edit dashboard branding and admin profile']
   };
 
-  headerTitle.innerHTML = map[target][0];
-  headerSubtitle.textContent = map[target][1];
+  const selectedView = map[target] || map.dashboard;
+  headerTitle.innerHTML = selectedView[0];
+  headerSubtitle.textContent = selectedView[1];
 }
 
 function renderSongs(filteredSongs) {
@@ -627,7 +627,7 @@ async function init() {
   }
 
   setAuthView(loggedIn);
-  switchView('library');
+  switchView('dashboard');
   applyBrandingToUI();
   if (loggedIn) loadSongs();
 }
