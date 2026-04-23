@@ -12,6 +12,7 @@ This repository includes two frontend options:
 - `DELETE /api/songs/:id` (requires `x-api-key`)
 - `POST /api/auth/signup`
 - `POST /api/auth/signin`
+- `POST /api/login` (admin username/password OR Supabase email/password)
 - `GET /api/profile-view` (requires `Authorization: Bearer <access_token>`)
 - `PUT /api/profile` (requires `Authorization: Bearer <access_token>`)
 - `POST /api/profile/avatar` (multipart/form-data, requires `Authorization: Bearer <access_token>`)
@@ -89,6 +90,7 @@ If you send `s3://bucket/key` in `audioUrl` or `coverUrl`, the API now normalize
 3. Run `supabase/schema.sql` in Supabase SQL editor to create the `profiles` table and policies.
 4. In Supabase Auth, enable Email/Password provider.
 5. Send the returned `accessToken` from `/api/auth/signin` as `Authorization: Bearer <token>` when calling profile endpoints.
+6. You can also sign in via `POST /api/login` using `{ "email": "...", "password": "..." }` (or put the email in `username` for legacy clients).
 
 ### Notes
 - `profile-view` always returns the user email from Supabase Auth (`auth.users`) so your profile screen can show email directly from Supabase.
