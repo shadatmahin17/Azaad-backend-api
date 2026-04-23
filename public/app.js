@@ -45,28 +45,7 @@ const siteNameDisplay = document.getElementById('siteNameDisplay');
 const headerTrackCount = document.getElementById('headerTrackCount');
 const headerCategoryCount = document.getElementById('headerCategoryCount');
 
-const MAIN_LOGO_SOURCE = 'https://mahin-cloud-storage.s3.ap-southeast-1.amazonaws.com/img/White+Logo.png';
-const LEGACY_LOGO_SOURCES = [
-  'https://mahin-cloud-storage.s3.ap-southeast-1.amazonaws.com/img/Logo.png',
-  'https://mahin-cloud-storage.s3.ap-southeast-1.amazonaws.com/img/Logo%20.png',
-  'https://mahin-cloud-storage.s3.amazonaws.com/img/Logo.png',
-  's3://mahin-cloud-storage/img/New Logo.png',
-  'https://mahin-cloud-storage.s3.ap-southeast-1.amazonaws.com/img/New+Logo.png',
-  'https://mahin-cloud-storage.s3.ap-southeast-1.amazonaws.com/img/New%20Logo.png',
-  'https://mahin-cloud-storage.s3.amazonaws.com/img/New%20Logo.png'
-];
-
-function normalizeLogoKey(url) {
-  if (!url || typeof url !== 'string') return '';
-  return url.trim().replace(/\+/g, ' ').toLowerCase();
-}
-
-function isLegacyLogoSource(url) {
-  const normalized = normalizeLogoKey(url);
-  if (!normalized) return false;
-  return LEGACY_LOGO_SOURCES.some((legacyUrl) => normalizeLogoKey(legacyUrl) === normalized);
-}
-
+const MAIN_LOGO_SOURCE = '/img/Black-Logo.png';
 function normalizeS3Url(url) {
   if (!url || typeof url !== 'string') return url;
   const trimmed = url.trim();
@@ -197,12 +176,10 @@ async function loginWithCredentials(username, password) {
 }
 
 function getBranding() {
-  const storedLogo = localStorage.getItem('logo_image') || '';
-  const resolvedLogo = (!storedLogo || isLegacyLogoSource(storedLogo)) ? DEFAULT_BRANDING.logoImage : storedLogo;
   return {
     siteName: localStorage.getItem('site_name') || DEFAULT_BRANDING.siteName,
     logoText: localStorage.getItem('logo_text') || DEFAULT_BRANDING.logoText,
-    logoImage: resolvedLogo,
+    logoImage: DEFAULT_BRANDING.logoImage,
     adminName: localStorage.getItem('admin_name') || DEFAULT_BRANDING.adminName,
     adminEmail: localStorage.getItem('admin_email') || DEFAULT_BRANDING.adminEmail,
     adminPhoto: localStorage.getItem('admin_photo') || DEFAULT_BRANDING.adminPhoto,
@@ -582,7 +559,7 @@ profileForm.addEventListener('submit', (event) => {
   const fields = new FormData(profileForm);
 
   localStorage.setItem('site_name', fields.get('siteName'));
-  localStorage.setItem('logo_image', fields.get('logoImage') || '');
+  localStorage.setItem('logo_image', MAIN_LOGO_SOURCE);
   localStorage.setItem('admin_name', fields.get('adminName'));
   localStorage.setItem('admin_email', fields.get('adminEmail'));
   localStorage.setItem('admin_photo', fields.get('adminPhoto'));

@@ -26,7 +26,7 @@ const DEFAULT_API_BASE = typeof window !== 'undefined' ? `${window.location.orig
 const API_BASE = import.meta.env.VITE_API_BASE || DEFAULT_API_BASE;
 const MAIN_SITE_URL = 'https://azzad-music-site-ruby.vercel.app/';
 const SERVER_BASE = API_BASE.replace('/api/songs', '');
-const MAIN_LOGO_SOURCE = 'https://mahin-cloud-storage.s3.ap-southeast-1.amazonaws.com/img/White+Logo.png';
+const MAIN_LOGO_SOURCE = '/img/Black-Logo.png';
 const APP_BACKGROUND_IMAGE_URL = 'https://mahin-cloud-storage.s3.ap-southeast-1.amazonaws.com/img/Background.jpg';
 const APP_DARK_BACKGROUND_STYLE = {
   backgroundImage: `url(${APP_BACKGROUND_IMAGE_URL})`,
