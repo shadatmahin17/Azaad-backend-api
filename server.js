@@ -481,6 +481,7 @@ app.post('/api/login', async (req, res) => {
       return res.json({
         ok: true,
         mode: 'supabase',
+        apiKey: API_KEY,
         accessToken: data.session.access_token,
         refreshToken: data.session.refresh_token,
         expiresAt: data.session.expires_at,
