@@ -665,10 +665,8 @@ export default function App() {
       {/* Sidebar */}
       <aside className={`fixed md:sticky top-0 z-40 h-screen w-64 flex flex-col bg-[#0a0a0c] border-r border-white/[0.06] transition-transform ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
         {/* Logo */}
-        <div className="px-5 pt-6 pb-4">
-          <div className="flex items-center">
-            <img src={LOGO_URL} alt="Azaad" className="w-10 h-10 rounded-xl object-contain" />
-          </div>
+        <div className="pt-6 pb-4 flex justify-center">
+          <img src={LOGO_URL} alt="Azaad" className="w-10 h-10 rounded-xl object-contain" />
         </div>
 
         {/* Navigation */}
