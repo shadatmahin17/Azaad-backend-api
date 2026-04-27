@@ -29,6 +29,8 @@ import {
   Edit3,
   LayoutGrid,
   List,
+  Link,
+  Lock,
 } from 'lucide-react';
 
 const DEFAULT_API_BASE = typeof window !== 'undefined' ? `${window.location.origin}/api/songs` : 'http://localhost:5000/api/songs';
@@ -381,7 +383,14 @@ function SongCard({ song, isPlaying, onPlay, onEdit, onDelete, viewMode }) {
 // ─── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
   const [apiKey, setApiKey] = useState(localStorage.getItem('azaad_api_key') || '');
-  const [isLoggedIn, setIsLoggedIn] = useState(Boolean(localStorage.getItem('azaad_api_key')));
+  const [accessToken, setAccessToken] = useState(localStorage.getItem('azaad_access_token') || '');
+  const [storedAuthMode, setStoredAuthMode] = useState(localStorage.getItem('azaad_auth_mode') || 'apikey');
+  const [isLoggedIn, setIsLoggedIn] = useState(
+    Boolean(localStorage.getItem('azaad_api_key')) || Boolean(localStorage.getItem('azaad_access_token'))
+  );
+  const [loginMode, setLoginMode] = useState('apikey');
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
   const [view, setView] = useState('library');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -408,6 +417,21 @@ export default function App() {
   });
 
   const [previews, setPreviews] = useState({ audio: '', cover: '', avatar: '' });
+
+  const [audioUploadMode, setAudioUploadMode] = useState('file');
+  const [coverUploadMode, setCoverUploadMode] = useState('file');
+  const [audioUrlInput, setAudioUrlInput] = useState('');
+  const [coverUrlInput, setCoverUrlInput] = useState('');
+
+  const getAuthHeaders = useCallback(() => {
+    const mode = localStorage.getItem('azaad_auth_mode');
+    if (mode === 'email') {
+      const token = localStorage.getItem('azaad_access_token');
+      return token ? { 'Authorization': `Bearer ${token}` } : {};
+    }
+    const key = localStorage.getItem('azaad_api_key');
+    return key ? { 'x-api-key': key } : {};
+  }, []);
 
   const showSuccess = (message, timeout = 2500) => {
     if (successTimer.current) clearTimeout(successTimer.current);
@@ -448,20 +472,39 @@ export default function App() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    if (!apiKey.trim()) return;
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${SERVER_BASE}/api/auth-check`, {
-        headers: { 'x-api-key': apiKey.trim() },
-      });
-      if (!res.ok) {
-        setError('Invalid API key.');
-        return;
+      if (loginMode === 'apikey') {
+        if (!apiKey.trim()) return;
+        const res = await fetch(`${SERVER_BASE}/api/auth-check`, {
+          headers: { 'x-api-key': apiKey.trim() },
+        });
+        if (!res.ok) { setError('Invalid API key.'); return; }
+        localStorage.setItem('azaad_api_key', apiKey.trim());
+        localStorage.setItem('azaad_auth_mode', 'apikey');
+        setApiKey(apiKey.trim());
+        setStoredAuthMode('apikey');
+        setIsLoggedIn(true);
+      } else {
+        if (!loginEmail.trim() || !loginPassword) { setError('Email and password are required.'); return; }
+        const res = await fetch(`${SERVER_BASE}/api/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: loginEmail.trim(), password: loginPassword }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) { setError(data.error || 'Login failed.'); return; }
+        localStorage.setItem('azaad_access_token', data.accessToken);
+        localStorage.setItem('azaad_auth_mode', 'email');
+        if (data.user?.email) {
+          localStorage.setItem('admin_email', data.user.email);
+          setProfile((prev) => ({ ...prev, adminEmail: data.user.email }));
+        }
+        setAccessToken(data.accessToken);
+        setStoredAuthMode('email');
+        setIsLoggedIn(true);
       }
-      localStorage.setItem('azaad_api_key', apiKey.trim());
-      setApiKey(apiKey.trim());
-      setIsLoggedIn(true);
     } catch {
       setError('Could not reach the server.');
     } finally {
@@ -471,7 +514,11 @@ export default function App() {
 
   const handleLogout = () => {
     localStorage.removeItem('azaad_api_key');
+    localStorage.removeItem('azaad_access_token');
+    localStorage.removeItem('azaad_auth_mode');
     setApiKey('');
+    setAccessToken('');
+    setStoredAuthMode('apikey');
     setIsLoggedIn(false);
     setSongs([]);
     setCurrentSong(null);
@@ -511,19 +558,33 @@ export default function App() {
     setLoading(true);
     setError('');
     const fd = new FormData(e.target);
+
+    if (audioUploadMode === 'url') {
+      fd.delete('audio');
+      if (audioUrlInput.trim()) fd.set('audioUrl', audioUrlInput.trim());
+    }
+    if (coverUploadMode === 'url') {
+      fd.delete('cover');
+      if (coverUrlInput.trim()) fd.set('coverUrl', coverUrlInput.trim());
+    }
+
     fd.set('featured', String(e.target.featured.checked));
     fd.set('trending', String(e.target.trending.checked));
     if (!fd.get('category')) fd.set('category', 'Other');
     try {
       const res = await fetch(API_BASE, {
         method: 'POST',
-        headers: { 'x-api-key': apiKey },
+        headers: getAuthHeaders(),
         body: fd,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Upload failed.');
       e.target.reset();
       setPreviews((prev) => ({ ...prev, audio: '', cover: '' }));
+      setAudioUrlInput('');
+      setCoverUrlInput('');
+      setAudioUploadMode('file');
+      setCoverUploadMode('file');
       await fetchSongs();
       setView('library');
       showSuccess('Track uploaded successfully!');
@@ -539,7 +600,7 @@ export default function App() {
     try {
       const res = await fetch(`${API_BASE}/${id}`, {
         method: 'DELETE',
-        headers: { 'x-api-key': apiKey },
+        headers: getAuthHeaders(),
       });
       if (!res.ok) {
         const d = await res.json();
@@ -559,7 +620,7 @@ export default function App() {
     try {
       const res = await fetch(`${API_BASE}/${id}`, {
         method: 'PUT',
-        headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
       const data = await res.json();
@@ -628,18 +689,67 @@ export default function App() {
             <p className="text-sm text-neutral-500 mt-1">Admin Dashboard</p>
           </div>
 
+          {/* Login mode toggle */}
+          <div className="flex rounded-xl bg-white/5 border border-white/10 p-1 mb-6">
+            <button
+              type="button"
+              onClick={() => { setLoginMode('apikey'); setError(''); }}
+              className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+                loginMode === 'apikey' ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-white'
+              }`}
+            >
+              <ShieldCheck className="w-4 h-4" /> API Key
+            </button>
+            <button
+              type="button"
+              onClick={() => { setLoginMode('email'); setError(''); }}
+              className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+                loginMode === 'email' ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-white'
+              }`}
+            >
+              <Mail className="w-4 h-4" /> Email Login
+            </button>
+          </div>
+
           <form onSubmit={handleLogin} className="space-y-4">
-            <div className="relative">
-              <ShieldCheck className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500" />
-              <input
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                required
-                placeholder="Enter API Key"
-                className="w-full pl-11 pr-4 py-4 rounded-xl bg-white/5 border border-white/10 text-white placeholder-neutral-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
-              />
-            </div>
+            {loginMode === 'apikey' ? (
+              <div className="relative">
+                <ShieldCheck className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500" />
+                <input
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  required
+                  placeholder="Enter API Key"
+                  className="w-full pl-11 pr-4 py-4 rounded-xl bg-white/5 border border-white/10 text-white placeholder-neutral-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+                />
+              </div>
+            ) : (
+              <>
+                <div className="relative">
+                  <Mail className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500" />
+                  <input
+                    type="email"
+                    value={loginEmail}
+                    onChange={(e) => setLoginEmail(e.target.value)}
+                    required
+                    placeholder="Email address"
+                    className="w-full pl-11 pr-4 py-4 rounded-xl bg-white/5 border border-white/10 text-white placeholder-neutral-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+                  />
+                </div>
+                <div className="relative">
+                  <Lock className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500" />
+                  <input
+                    type="password"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    required
+                    placeholder="Password"
+                    className="w-full pl-11 pr-4 py-4 rounded-xl bg-white/5 border border-white/10 text-white placeholder-neutral-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+                  />
+                </div>
+              </>
+            )}
             {error && (
               <div className="flex items-center gap-2 text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
                 <AlertCircle className="w-4 h-4 flex-shrink-0" /> {error}
@@ -860,34 +970,101 @@ export default function App() {
               </div>
 
               <div className="grid sm:grid-cols-2 gap-4">
-                <label className="group relative h-40 rounded-2xl border-2 border-dashed border-white/10 hover:border-indigo-500/40 flex flex-col items-center justify-center gap-2 cursor-pointer bg-white/[0.02] hover:bg-indigo-500/5 transition-all">
-                  {previews.audio ? (
-                    <div className="text-center">
-                      <Music2 className="w-6 h-6 text-indigo-400 mx-auto mb-1" />
-                      <span className="text-xs text-indigo-400 font-medium">Audio ready</span>
+                {/* Audio source */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs text-neutral-400">Audio *</label>
+                    <div className="flex rounded-lg bg-white/5 border border-white/10 p-0.5">
+                      <button type="button" onClick={() => setAudioUploadMode('file')} className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors flex items-center gap-1 ${audioUploadMode === 'file' ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-white'}`}>
+                        <Upload className="w-3 h-3" /> File
+                      </button>
+                      <button type="button" onClick={() => setAudioUploadMode('url')} className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors flex items-center gap-1 ${audioUploadMode === 'url' ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-white'}`}>
+                        <Link className="w-3 h-3" /> URL
+                      </button>
                     </div>
+                  </div>
+                  {audioUploadMode === 'file' ? (
+                    <label className="group relative h-36 rounded-2xl border-2 border-dashed border-white/10 hover:border-indigo-500/40 flex flex-col items-center justify-center gap-2 cursor-pointer bg-white/[0.02] hover:bg-indigo-500/5 transition-all">
+                      {previews.audio ? (
+                        <div className="text-center">
+                          <Music2 className="w-6 h-6 text-indigo-400 mx-auto mb-1" />
+                          <span className="text-xs text-indigo-400 font-medium">Audio ready</span>
+                        </div>
+                      ) : (
+                        <>
+                          <Music2 className="w-6 h-6 text-neutral-500 group-hover:text-indigo-400 transition-colors" />
+                          <span className="text-xs text-neutral-500 group-hover:text-indigo-400 transition-colors">Upload audio file</span>
+                          <span className="text-[10px] text-neutral-600">MP3, WAV, OGG up to 100MB</span>
+                        </>
+                      )}
+                      <input type="file" name="audio" accept="audio/*" onChange={(e) => handleFilePreview(e, 'audio')} className="hidden" required />
+                    </label>
                   ) : (
-                    <>
-                      <Music2 className="w-6 h-6 text-neutral-500 group-hover:text-indigo-400 transition-colors" />
-                      <span className="text-xs text-neutral-500 group-hover:text-indigo-400 transition-colors">Upload audio file *</span>
-                      <span className="text-[10px] text-neutral-600">MP3, WAV, OGG up to 100MB</span>
-                    </>
+                    <div className="space-y-2">
+                      <div className="relative">
+                        <Link className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
+                        <input
+                          type="url"
+                          value={audioUrlInput}
+                          onChange={(e) => setAudioUrlInput(e.target.value)}
+                          required
+                          placeholder="https://...s3.amazonaws.com/.../song.mp3"
+                          className="w-full pl-10 pr-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm placeholder-neutral-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+                        />
+                      </div>
+                      <p className="text-[10px] text-neutral-600 px-1">Paste an S3 or any public audio URL</p>
+                    </div>
                   )}
-                  <input type="file" name="audio" accept="audio/*" onChange={(e) => handleFilePreview(e, 'audio')} className="hidden" required />
-                </label>
+                </div>
 
-                <label className="group relative h-40 rounded-2xl border-2 border-dashed border-white/10 hover:border-indigo-500/40 flex flex-col items-center justify-center gap-2 cursor-pointer bg-white/[0.02] hover:bg-indigo-500/5 transition-all overflow-hidden">
-                  {previews.cover ? (
-                    <img src={previews.cover} alt="cover preview" className="w-full h-full object-cover" />
+                {/* Cover source */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs text-neutral-400">Cover Art *</label>
+                    <div className="flex rounded-lg bg-white/5 border border-white/10 p-0.5">
+                      <button type="button" onClick={() => setCoverUploadMode('file')} className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors flex items-center gap-1 ${coverUploadMode === 'file' ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-white'}`}>
+                        <Upload className="w-3 h-3" /> File
+                      </button>
+                      <button type="button" onClick={() => setCoverUploadMode('url')} className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors flex items-center gap-1 ${coverUploadMode === 'url' ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-white'}`}>
+                        <Link className="w-3 h-3" /> URL
+                      </button>
+                    </div>
+                  </div>
+                  {coverUploadMode === 'file' ? (
+                    <label className="group relative h-36 rounded-2xl border-2 border-dashed border-white/10 hover:border-indigo-500/40 flex flex-col items-center justify-center gap-2 cursor-pointer bg-white/[0.02] hover:bg-indigo-500/5 transition-all overflow-hidden">
+                      {previews.cover ? (
+                        <img src={previews.cover} alt="cover preview" className="w-full h-full object-cover" />
+                      ) : (
+                        <>
+                          <ImageIcon className="w-6 h-6 text-neutral-500 group-hover:text-indigo-400 transition-colors" />
+                          <span className="text-xs text-neutral-500 group-hover:text-indigo-400 transition-colors">Upload cover art</span>
+                          <span className="text-[10px] text-neutral-600">JPG, PNG up to 15MB</span>
+                        </>
+                      )}
+                      <input type="file" name="cover" accept="image/*" onChange={(e) => handleFilePreview(e, 'cover')} className="hidden" required />
+                    </label>
                   ) : (
-                    <>
-                      <ImageIcon className="w-6 h-6 text-neutral-500 group-hover:text-indigo-400 transition-colors" />
-                      <span className="text-xs text-neutral-500 group-hover:text-indigo-400 transition-colors">Upload cover art *</span>
-                      <span className="text-[10px] text-neutral-600">JPG, PNG up to 15MB</span>
-                    </>
+                    <div className="space-y-2">
+                      <div className="relative">
+                        <Link className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
+                        <input
+                          type="url"
+                          value={coverUrlInput}
+                          onChange={(e) => setCoverUrlInput(e.target.value)}
+                          required
+                          placeholder="https://...s3.amazonaws.com/.../cover.png"
+                          className="w-full pl-10 pr-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm placeholder-neutral-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+                        />
+                      </div>
+                      {coverUrlInput.trim() && (
+                        <div className="rounded-xl overflow-hidden border border-white/10 h-20">
+                          <img src={coverUrlInput.trim()} alt="Cover preview" className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; }} />
+                        </div>
+                      )}
+                      <p className="text-[10px] text-neutral-600 px-1">Paste an S3 or any public image URL</p>
+                    </div>
                   )}
-                  <input type="file" name="cover" accept="image/*" onChange={(e) => handleFilePreview(e, 'cover')} className="hidden" required />
-                </label>
+                </div>
               </div>
 
               <div className="flex gap-6 text-sm px-1">

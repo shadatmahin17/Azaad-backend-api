@@ -2,7 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const { requireApiKey } = require('../middleware/auth');
+const { requireAuth } = require('../middleware/auth');
 const { upload } = require('../middleware/upload');
 const { readSongs, writeSongs } = require('../utils/songs');
 const { normalizeMediaUrl, isAllowedMediaUrl } = require('../utils/media');
@@ -44,7 +44,7 @@ router.get('/', (req, res) => {
 
 router.post(
   '/',
-  requireApiKey,
+  requireAuth,
   upload.fields([
     { name: 'audio', maxCount: 1 },
     { name: 'cover', maxCount: 1 },
@@ -123,7 +123,7 @@ router.post(
   }
 );
 
-router.put('/:id', requireApiKey, (req, res) => {
+router.put('/:id', requireAuth, (req, res) => {
   try {
     const songs = readSongs();
     const index = songs.findIndex((song) => song.id === req.params.id);
@@ -239,7 +239,7 @@ router.put('/:id', requireApiKey, (req, res) => {
   }
 });
 
-router.delete('/:id', requireApiKey, (req, res) => {
+router.delete('/:id', requireAuth, (req, res) => {
   try {
     const songs = readSongs();
     const index = songs.findIndex((song) => song.id === req.params.id);
