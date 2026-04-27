@@ -57,9 +57,40 @@ function requireApiKey(req, res, next) {
   next();
 }
 
+async function requireAuth(req, res, next) {
+  const apiKeyHeader = req.headers['x-api-key'];
+  if (apiKeyHeader === API_KEY) {
+    return next();
+  }
+
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+
+  if (!token) {
+    return res.status(401).json({ error: 'Unauthorized – provide x-api-key or Bearer token' });
+  }
+
+  if (!supabaseAdmin) {
+    return res.status(401).json({ error: 'Supabase is not configured on the server' });
+  }
+
+  try {
+    const { data, error } = await supabaseAdmin.auth.getUser(token);
+    if (error || !data?.user) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+    req.supabaseUser = data.user;
+    req.supabaseAccessToken = token;
+    return next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Authentication failed' });
+  }
+}
+
 module.exports = {
   ensureSupabaseReady,
   ensureSupabaseDataReady,
   requireSupabaseUser,
   requireApiKey,
+  requireAuth,
 };
